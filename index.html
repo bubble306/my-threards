@@ -1,36 +1,38 @@
-// 在发帖的逻辑 send() 函数里，确保这部分是对应的：
 async function send() {
     const name = document.getElementById('nickname').value || '匿名';
     const val = document.getElementById('t').value;
     const file = document.getElementById('fileInput').files[0];
-    let imgUrl = null;
-
-    if (!val && !file) return;
+    let finalImageUrl = null; // 默认是空
 
     if (file) {
         const fileName = Date.now() + '-' + file.name;
-        // 把图片上传到 images 桶
+        // 1. 先上传文件
         const { data, error } = await client.storage.from('images').upload(fileName, file);
-        if (error) { alert("上传失败：" + error.message); return; }
-        
-        // 获取图片的公开链接
+        if (error) {
+            console.error("上传失败:", error);
+            alert("上传失败: " + error.message);
+            return;
+        }
+        // 2. 拿到这个文件的网络地址
         const { data: { publicUrl } } = client.storage.from('images').getPublicUrl(fileName);
-        imgUrl = publicUrl;
+        finalImageUrl = publicUrl;
     }
 
-    // 存入数据库
-    await client.from('posts').insert([{ 
+    // 3. 把地址存进数据库
+    const { error: dbError } = await client.from('posts').insert([{ 
         content: val, 
         user_name: name, 
         likes: 0, 
-        image_url: imgUrl 
+        image_url: finalImageUrl 
     }]);
-    
-    location.reload(); // 刷新页面看新贴
+
+    if(dbError) {
+        console.error("存入数据库失败:", dbError);
+    } else {
+        location.reload(); 
+    }
 }
 
-// 在显示帖子的 innerHTML 里面，别忘了加这一行来显示图片：
-// ${p.image_url ? `< img src="${p.image_url}" style="width:100%; border-radius:10px; margin-top:10px;">` : ''}
 
 
 
