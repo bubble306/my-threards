@@ -2,27 +2,28 @@
 <html>
 <head>
     <meta charset="UTF-8">
-    <title>Echo's Threads - 全功能版</title>
+    <title>Echo's Threads - 终极修复版</title>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <style>
         body { font-family: -apple-system, sans-serif; background: #f0f2f5; display: flex; flex-direction: column; align-items: center; padding: 20px; }
         .box { background: white; padding: 20px; border-radius: 15px; width: 100%; max-width: 450px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); margin-bottom: 20px; }
         input, textarea { width: 100%; border: 1px solid #ddd; border-radius: 8px; padding: 10px; box-sizing: border-box; margin-bottom: 10px; font-size: 14px; }
         button { background: #000; color: #fff; border: none; padding: 12px; border-radius: 25px; cursor: pointer; width: 100%; font-weight: bold; }
+        button:disabled { background: #ccc; }
         .post { background: white; padding: 15px; border-radius: 15px; margin-top: 15px; width: 100%; max-width: 450px; box-shadow: 0 2px 5px rgba(0,0,0,0.05); }
         .user-tag { color: #1d9bf0; font-weight: bold; }
         .post-content { margin: 10px 0; font-size: 16px; white-space: pre-wrap; }
+        .post-img { width: 100%; border-radius: 10px; margin: 10px 0; display: block; }
         .actions { display: flex; gap: 20px; border-top: 1px solid #f0f0f0; padding-top: 10px; color: #666; font-size: 14px; }
         .action-item { cursor: pointer; display: flex; align-items: center; gap: 5px; }
         .comment-section { background: #f8f9fa; padding: 10px; border-radius: 10px; margin-top: 10px; font-size: 13px; }
         .cmt-item { margin-bottom: 5px; border-bottom: 1px dashed #eee; padding-bottom: 3px; }
-        img.post-img { width: 100%; border-radius: 10px; margin: 10px 0; display: block; box-shadow: 0 2px 5px rgba(0,0,0,0.1); }
     </style>
 </head>
 <body>
     <div class="box">
         <input type="text" id="nickname" placeholder="你的名字">
-        <textarea id="t" rows="3" placeholder="说点什么，或者上传一张图片..."></textarea>
+        <textarea id="t" rows="3" placeholder="说点什么..."></textarea>
         <input type="file" id="fileInput" accept="image/*">
         <button id="sendBtn" onclick="send()">发布动态</button>
     </div>
@@ -35,7 +36,7 @@
 
         async function load() {
             const { data: posts, error } = await client.from('posts').select('*').order('created_at', { ascending: false });
-            if (error) return console.error(error);
+            if (error) return;
             const list = document.getElementById('list');
             list.innerHTML = "";
             
@@ -44,20 +45,23 @@
                 const d = document.createElement('div');
                 d.className = 'post';
                 
-                // 图片显示逻辑：如果有 image_url 就显示图片
-                const imgHtml = p.image_url ? `< img src="${p.image_url}" class="post-img">` : '';
+                // 🛠️ 核心修复：这里直接把图片标签写在 HTML 里，不乱套引号
+                let imageElement = "";
+                if (p.image_url) {
+                    imageElement = `< img src="${p.image_url}" class="post-img">`;
+                }
 
                 d.innerHTML = `
                     <div class="user-tag">@${p.user_name || '匿名'}</div>
-                    <p class="post-content">${p.content}</p >
-                    ${imgHtml}
+                    <div class="post-content">${p.content || ''}</div>
+                    ${imageElement}
                     <div class="actions">
                         <div class="action-item" onclick="like(${p.id}, ${p.likes || 0})">❤️ ${p.likes || 0}</div>
                         <div class="action-item">💬 ${cms ? cms.length : 0}</div>
                     </div>
                     <div class="comment-section">
                         <div id="cmt-list-${p.id}">${cms ? cms.map(c => `<div class="cmt-item"><b>${c.user_name}:</b> ${c.content}</div>`).join('') : ''}</div>
-                        <input type="text" placeholder="写评论并回车..." onkeydown="if(event.keyCode==13) addComment(${p.id}, this)">
+                        <input type="text" placeholder="评论并回车..." onkeydown="if(event.keyCode==13) addComment(${p.id}, this)">
                     </div>
                 `;
                 list.appendChild(d);
@@ -69,52 +73,16 @@
             const name = document.getElementById('nickname').value || '匿名';
             const val = document.getElementById('t').value;
             const file = document.getElementById('fileInput').files[0];
-            let url = null;
+            let finalUrl = null;
 
             if (!val && !file) return;
-            btn.innerText = "上传中...";
+            btn.innerText = "发送中...";
             btn.disabled = true;
 
-            // 1. 先传图片
             if (file) {
                 const fileName = Date.now() + '-' + file.name;
-                const { data, error } = await client.storage.from('images').upload(fileName, file);
-                if (error) {
-                    alert("图片上传柜子失败：" + error.message);
-                } else {
-                    const { data: { publicUrl } } = client.storage.from('images').getPublicUrl(fileName);
-                    url = publicUrl;
-                }
-            }
+                const { data, error } = await client.storage.from('images').upload(fileName
 
-            // 2. 存入数据库
-            await client.from('posts').insert([{ content: val, user_name: name, likes: 0, image_url: url }]);
-            
-            // 3. 重置并刷新
-            btn.innerText = "发布动态";
-            btn.disabled = false;
-            document.getElementById('t').value = "";
-            document.getElementById('fileInput').value = "";
-            load();
-        }
-
-        async function like(id, curr) {
-            await client.from('posts').update({ likes: curr + 1 }).eq('id', id);
-            load();
-        }
-
-        async function addComment(postId, input) {
-            const name = document.getElementById('nickname').value || '匿名';
-            if(!input.value) return;
-            await client.from('comments').insert([{ post_id: postId, content: input.value, user_name: name }]);
-            input.value = "";
-            load();
-        }
-
-        load();
-    </script>
-</body>
-</html>
 
 
 
