@@ -2,7 +2,7 @@
 <html>
 <head>
     <meta charset="UTF-8">
-    <title>Echo's Threads - 正式版</title>
+    <title>Echo's Threads - 全功能修复版</title>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <style>
         body { font-family: -apple-system, sans-serif; background: #f0f2f5; display: flex; flex-direction: column; align-items: center; padding: 20px; }
@@ -14,20 +14,22 @@
         .post-content { margin: 10px 0; font-size: 16px; white-space: pre-wrap; }
         .post-img { width: 100%; border-radius: 10px; margin: 10px 0; display: block; }
         .actions { display: flex; gap: 20px; border-top: 1px solid #f0f0f0; padding-top: 10px; color: #666; font-size: 14px; }
+        .action-item { cursor: pointer; display: flex; align-items: center; gap: 5px; }
+        .comment-section { background: #f8f9fa; padding: 10px; border-radius: 10px; margin-top: 10px; font-size: 13px; }
+        .cmt-item { margin-bottom: 5px; border-bottom: 1px dashed #eee; padding-bottom: 3px; }
     </style>
 </head>
 <body>
     <div class="box">
         <input type="text" id="nickname" placeholder="你的名字">
-        <textarea id="t" rows="3" placeholder="写点什么..."></textarea>
+        <textarea id="t" rows="3" placeholder="说点什么..."></textarea>
         <input type="file" id="fileInput" accept="image/*">
         <button id="sendBtn" onclick="send()">发布动态</button>
     </div>
-    <div id="list" style="width: 100%; max-width: 450px;">正在加载内容...</div>
+    <div id="list" style="width: 100%; max-width: 450px;">正在努力加载中...</div>
 
     <script>
         const SB_URL = "https://fzxucsdptrikazqvdnlv.supabase.co";
-        // 已经帮你贴好了你给我的那个 Key
         const SB_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZ6eHVjc2RwdHJpa2F6cXZkbmx2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzAzMzU0NjYsImV4cCI6MjA4NTkxMTQ2Nn0.ZChcBRbRorV7pHrQmGd0MV_A2x4fz8_h55-lMqvHhNY"; 
         const client = supabase.createClient(SB_URL, SB_KEY);
 
@@ -36,16 +38,28 @@
             if (error) return;
             const list = document.getElementById('list');
             list.innerHTML = "";
+            
             for (let p of posts) {
+                // 获取回复/评论
+                const { data: cms } = await client.from('comments').select('*').eq('post_id', p.id);
                 const d = document.createElement('div');
                 d.className = 'post';
-                // 重点：如果 image_url 有值，才显示图片标签
-                let imgHtml = p.image_url ? `< img src="${p.image_url}" class="post-img">` : '';
+                
+                // 图片显示逻辑：只读 image_url 列
+                const imgHtml = p.image_url ? `< img src="${p.image_url}" class="post-img">` : '';
+
                 d.innerHTML = `
                     <div class="user-tag">@${p.user_name || '匿名'}</div>
                     <div class="post-content">${p.content || ''}</div>
                     ${imgHtml}
-                    <div class="actions">❤️ ${p.likes || 0}</div>
+                    <div class="actions">
+                        <div class="action-item" onclick="like(${p.id}, ${p.likes || 0})">❤️ ${p.likes || 0}</div>
+                        <div class="action-item">💬 ${cms ? cms.length : 0}</div>
+                    </div>
+                    <div class="comment-section">
+                        <div id="cmt-list-${p.id}">${cms ? cms.map(c => `<div class="cmt-item"><b>${c.user_name}:</b> ${c.content}</div>`).join('') : ''}</div>
+                        <input type="text" placeholder="写回复..." onkeydown="if(event.keyCode==13) addComment(${p.id}, this)">
+                    </div>
                 `;
                 list.appendChild(d);
             }
@@ -56,10 +70,10 @@
             const name = document.getElementById('nickname').value || '匿名';
             const val = document.getElementById('t').value;
             const file = document.getElementById('fileInput').files[0];
-            let finalUrl = null;
+            let url = null;
 
             if (!val && !file) return;
-            btn.innerText = "上传中...";
+            btn.innerText = "发布中...";
             btn.disabled = true;
 
             if (file) {
@@ -67,23 +81,36 @@
                 const { data, error } = await client.storage.from('images').upload(fileName, file);
                 if (!error) {
                     const { data: { publicUrl } } = client.storage.from('images').getPublicUrl(fileName);
-                    finalUrl = publicUrl;
+                    url = publicUrl;
                 }
             }
 
-            // 重点：存入数据库时，不要自己拼 <img> 标签！直接存 finalUrl
-            await client.from('posts').insert([{ content: val, user_name: name, likes: 0, image_url: finalUrl }]);
-            
+            await client.from('posts').insert([{ content: val, user_name: name, likes: 0, image_url: url }]);
             btn.innerText = "发布动态";
             btn.disabled = false;
             document.getElementById('t').value = "";
             document.getElementById('fileInput').value = "";
             load();
         }
+
+        async function like(id, curr) {
+            await client.from('posts').update({ likes: curr + 1 }).eq('id', id);
+            load();
+        }
+
+        async function addComment(postId, input) {
+            const name = document.getElementById('nickname').value || '匿名';
+            if(!input.value) return;
+            await client.from('comments').insert([{ post_id: postId, content: input.value, user_name: name }]);
+            input.value = "";
+            load();
+        }
+
         load();
     </script>
 </body>
 </html>
+
 
 
 
