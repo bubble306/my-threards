@@ -2,90 +2,55 @@
 <html>
 <head>
     <meta charset="UTF-8">
-    <title>Echo's Threads - 全球同步版</title>
+    <title>Echo's Threads</title>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <style>
         body { font-family: sans-serif; background: #f0f2f5; display: flex; flex-direction: column; align-items: center; padding: 20px; }
-        .container { width: 100%; max-width: 500px; }
-        .input-box { background: white; padding: 20px; border-radius: 15px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); margin-bottom: 20px; }
-        textarea { width: 100%; border: 1px solid #ddd; border-radius: 10px; padding: 10px; box-sizing: border-box; resize: none; outline: none; }
-        .btn { background: #000; color: #fff; border: none; padding: 10px 20px; border-radius: 20px; cursor: pointer; float: right; margin-top: 10px; font-weight: bold; }
-        .card { background: white; padding: 20px; border-radius: 15px; box-shadow: 0 2px 5px rgba(0,0,0,0.05); margin-bottom: 15px; position: relative; }
-        .user { font-weight: bold; color: #1c1e21; }
-        .content { margin: 10px 0; color: #333; line-height: 1.5; white-space: pre-wrap; }
-        .time { font-size: 12px; color: #90949c; }
-        .actions { border-top: 1px solid #eee; padding-top: 10px; margin-top: 10px; display: flex; gap: 20px; }
-        .action-item { cursor: pointer; font-size: 18px; }
+        .box { background: white; padding: 20px; border-radius: 15px; width: 100%; max-width: 400px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
+        textarea { width: 100%; border: 1px solid #ddd; border-radius: 10px; padding: 10px; box-sizing: border-box; }
+        button { background: #000; color: #fff; border: none; padding: 10px 20px; border-radius: 20px; cursor: pointer; margin-top: 10px; width: 100%; }
+        .post { background: white; padding: 15px; border-radius: 10px; margin-top: 10px; width: 100%; max-width: 400px; border-bottom: 1px solid #eee; }
     </style>
 </head>
 <body>
-
-    <div class="container">
-        <div class="input-box">
-            <textarea id="postInput" rows="3" placeholder="Echo，今天想聊点什么？"></textarea>
-            <button class="btn" onclick="publish()">发布</button>
-            <div style="clear:both;"></div>
-        </div>
-        <div id="postList">加载中...</div>
+    <div class="box">
+        <textarea id="t" rows="3" placeholder="说点什么..."></textarea>
+        <button onclick="send()">发布</button>
     </div>
+    <div id="list">正在连接数据库...</div>
 
     <script>
-        // 1. 连接你的云端大脑
         const SB_URL = "https://fzxucsdptrikazqvdnlv.supabase.co";
-        const SB_KEY = "Sb_publishable_YsUp5SFO5fnLwpC9J11mZw_4T0PZTaj"; // 这是你给我的 Key
-        const supabase = supabase.createClient(SB_URL, SB_KEY);
+        const SB_KEY = "Sb_publishable_YsUp5SFO5fnLwpC9J11mZw_4T0PZTaj";
+        
+        // 初始化
+        const client = supabase.createClient(SB_URL, SB_KEY);
 
-        // 2. 页面打开时，去云端抓取所有贴子
-        async function fetchPosts() {
-            const { data, error } = await supabase
-                .from('posts')
-                .select('*')
-                .order('created_at', { ascending: false });
-
+        async function load() {
+            const { data, error } = await client.from('posts').select('*').order('created_at', { ascending: false });
             if (error) {
-                console.error(error);
-                document.getElementById('postList').innerHTML = "数据库表还没建好哦！";
-                return;
-            }
-
-            const list = document.getElementById('postList');
-            list.innerHTML = "";
-            data.forEach(item => {
-                const div = document.createElement('div');
-                div.className = 'card';
-                div.innerHTML = `
-                    <div class="user">@${item.user_name || '匿名用户'}</div>
-                    <div class="time">${new Date(item.created_at).toLocaleString()}</div>
-                    <p class="content">${item.content}</p >
-                    <div class="actions">
-                        <span class="action-item">🤍</span>
-                        <span class="action-item" onclick="alert('评论功能需要再建一张comment表，想学吗？')">💬</span>
-                        <span class="action-item">✈️</span>
-                    </div>
-                `;
-                list.appendChild(div);
-            });
-        }
-
-        // 3. 发布新贴子到云端
-        async function publish() {
-            const content = document.getElementById('postInput').value;
-            if (!content) return;
-
-            const { error } = await supabase
-                .from('posts')
-                .insert([{ content: content, user_name: 'Echo' }]);
-
-            if (error) {
-                alert("发布失败，请检查Supabase里是否建了名为 posts 的表！");
+                document.getElementById('list').innerHTML = "出错了：" + error.message;
             } else {
-                document.getElementById('postInput').value = "";
-                fetchPosts(); // 刷新列表
+                document.getElementById('list').innerHTML = data.length === 0 ? "还没人发帖，快抢沙发！" : "";
+                data.forEach(p => {
+                    const d = document.createElement('div');
+                    d.className = 'post';
+                    d.innerHTML = `<b>@Echo</b><p>${p.content}</p >`;
+                    document.getElementById('list').appendChild(d);
+                });
             }
         }
 
-        // 初始加载
-        fetchPosts();
+        async function send() {
+            const val = document.getElementById('t').value;
+            if(!val) return;
+            const { error } = await client.from('posts').insert([{ content: val, user_name: 'Echo' }]);
+            if (error) alert("发帖失败：" + error.message);
+            else { document.getElementById('t').value = ""; load(); }
+        }
+
+        load();
     </script>
 </body>
 </html>
+
