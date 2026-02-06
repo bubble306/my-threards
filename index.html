@@ -1,37 +1,50 @@
-async function send() {
-    const name = document.getElementById('nickname').value || '匿名';
-    const val = document.getElementById('t').value;
-    const file = document.getElementById('fileInput').files[0];
-    let finalImageUrl = null; // 默认是空
+<input type="file" id="fileInput" accept="image/*" style="margin-bottom:10px;">
 
-    if (file) {
-        const fileName = Date.now() + '-' + file.name;
-        // 1. 先上传文件
-        const { data, error } = await client.storage.from('images').upload(fileName, file);
-        if (error) {
-            console.error("上传失败:", error);
-            alert("上传失败: " + error.message);
-            return;
+<script>
+    // ...之前的初始化代码保持不变...
+
+    async function send() {
+        const name = document.getElementById('nickname').value || '匿名';
+        const val = document.getElementById('t').value;
+        const file = document.getElementById('fileInput').files[0];
+        let imgUrl = null;
+
+        if (!val && !file) return;
+
+        // 1. 如果有图片，先传到 Storage
+        if (file) {
+            const fileName = Date.now() + '-' + file.name;
+            const { data, error } = await client.storage
+                .from('images')
+                .upload(fileName, file);
+            
+            if (error) {
+                alert("图片上传失败：" + error.message);
+                return;
+            }
+            // 拿到公开访问链接
+            const { data: { publicUrl } } = client.storage.from('images').getPublicUrl(fileName);
+            imgUrl = publicUrl;
         }
-        // 2. 拿到这个文件的网络地址
-        const { data: { publicUrl } } = client.storage.from('images').getPublicUrl(fileName);
-        finalImageUrl = publicUrl;
+
+        // 2. 把文字和图片链接一起存入 posts 表
+        await client.from('posts').insert([{ 
+            content: val, 
+            user_name: name, 
+            likes: 0, 
+            image_url: imgUrl 
+        }]);
+
+        document.getElementById('t').value = "";
+        document.getElementById('fileInput').value = ""; // 清空文件选择
+        load();
     }
 
-    // 3. 把地址存进数据库
-    const { error: dbError } = await client.from('posts').insert([{ 
-        content: val, 
-        user_name: name, 
-        likes: 0, 
-        image_url: finalImageUrl 
-    }]);
+    // 在 load 函数渲染帖子的地方，加入图片的显示逻辑
+    // 在 innerHTML 里找到合适位置加入：
+    // ${p.image_url ? `< img src="${p.image_url}" style="width:100%; border-radius:10px; margin-top:10px;">` : ''}
+</script>
 
-    if(dbError) {
-        console.error("存入数据库失败:", dbError);
-    } else {
-        location.reload(); 
-    }
-}
 
 
 
