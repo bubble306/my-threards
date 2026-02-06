@@ -2,104 +2,90 @@
 <html>
 <head>
     <meta charset="UTF-8">
-    <title>Echo's Threads</title>
+    <title>Echo's Threads - 全球同步版</title>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <style>
-        body { font-family: sans-serif; background-color: #E0F2FE; display: flex; flex-direction: column; align-items: center; padding: 20px; }
-        
-        /* 发布框 */
-        .input-section { background: white; width: 100%; max-width: 500px; border-radius: 20px; padding: 20px; margin-bottom: 20px; display: flex; flex-direction: column; gap: 10px; box-shadow: 0 4px 10px rgba(0,0,0,0.1); }
-        textarea { border: 1px solid #ddd; border-radius: 10px; padding: 10px; resize: none; outline: none; font-size: 15px; }
-        #post-btn { background: black; color: white; border: none; padding: 10px 20px; border-radius: 20px; cursor: pointer; align-self: flex-end; font-weight: bold; }
-        
-        /* 帖子列表 */
-        #threads-container { width: 100%; max-width: 500px; }
-        .thread-card { background: white; border-radius: 20px; padding: 20px; margin-bottom: 15px; position: relative; box-shadow: 0 2px 5px rgba(0,0,0,0.05); }
-        
-        /* 删除按钮：右上角红色小圆点 */
-        .del-btn { position: absolute; top: 15px; right: 15px; background: #ff4d4f; color: white; width: 22px; height: 22px; border-radius: 50%; text-align: center; line-height: 20px; cursor: pointer; font-size: 14px; }
-        
-        .user-name { font-weight: bold; color: #1e293b; font-size: 16px; }
-        .post-time { font-size: 12px; color: #999; margin-top: 4px; }
-        .content { color: #333; line-height: 1.6; margin: 15px 0; white-space: pre-wrap; }
-        
-        /* 互动按钮 */
-        .actions { border-top: 1px solid #f0f0f0; padding-top: 12px; display: flex; gap: 25px; font-size: 18px; color: #666; }
-        .action-item { cursor: pointer; }
+        body { font-family: sans-serif; background: #f0f2f5; display: flex; flex-direction: column; align-items: center; padding: 20px; }
+        .container { width: 100%; max-width: 500px; }
+        .input-box { background: white; padding: 20px; border-radius: 15px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); margin-bottom: 20px; }
+        textarea { width: 100%; border: 1px solid #ddd; border-radius: 10px; padding: 10px; box-sizing: border-box; resize: none; outline: none; }
+        .btn { background: #000; color: #fff; border: none; padding: 10px 20px; border-radius: 20px; cursor: pointer; float: right; margin-top: 10px; font-weight: bold; }
+        .card { background: white; padding: 20px; border-radius: 15px; box-shadow: 0 2px 5px rgba(0,0,0,0.05); margin-bottom: 15px; position: relative; }
+        .user { font-weight: bold; color: #1c1e21; }
+        .content { margin: 10px 0; color: #333; line-height: 1.5; white-space: pre-wrap; }
+        .time { font-size: 12px; color: #90949c; }
+        .actions { border-top: 1px solid #eee; padding-top: 10px; margin-top: 10px; display: flex; gap: 20px; }
+        .action-item { cursor: pointer; font-size: 18px; }
     </style>
 </head>
 <body>
 
-    <div class="input-section">
-        <textarea id="post-input" rows="3" placeholder="Echo，今天想发点什么？"></textarea>
-        <button id="post-btn" onclick="addPost()">发布</button>
+    <div class="container">
+        <div class="input-box">
+            <textarea id="postInput" rows="3" placeholder="Echo，今天想聊点什么？"></textarea>
+            <button class="btn" onclick="publish()">发布</button>
+            <div style="clear:both;"></div>
+        </div>
+        <div id="postList">加载中...</div>
     </div>
 
-    <div id="threads-container"></div>
-
     <script>
-        // 1. 初始化：从本地存储载入数据
-        window.onload = function() {
-            const savedData = localStorage.getItem('echo_threads_data');
-            if(savedData) {
-                const posts = JSON.parse(savedData);
-                posts.forEach(p => renderPost(p.text, p.time, p.id));
+        // 1. 连接你的云端大脑
+        const SB_URL = "https://fzxucsdptrikazqvdnlv.supabase.co";
+        const SB_KEY = "Sb_publishable_YsUp5SFO5fnLwpC9J11mZw_4T0PZTaj"; // 这是你给我的 Key
+        const supabase = supabase.createClient(SB_URL, SB_KEY);
+
+        // 2. 页面打开时，去云端抓取所有贴子
+        async function fetchPosts() {
+            const { data, error } = await supabase
+                .from('posts')
+                .select('*')
+                .order('created_at', { ascending: false });
+
+            if (error) {
+                console.error(error);
+                document.getElementById('postList').innerHTML = "数据库表还没建好哦！";
+                return;
+            }
+
+            const list = document.getElementById('postList');
+            list.innerHTML = "";
+            data.forEach(item => {
+                const div = document.createElement('div');
+                div.className = 'card';
+                div.innerHTML = `
+                    <div class="user">@${item.user_name || '匿名用户'}</div>
+                    <div class="time">${new Date(item.created_at).toLocaleString()}</div>
+                    <p class="content">${item.content}</p >
+                    <div class="actions">
+                        <span class="action-item">🤍</span>
+                        <span class="action-item" onclick="alert('评论功能需要再建一张comment表，想学吗？')">💬</span>
+                        <span class="action-item">✈️</span>
+                    </div>
+                `;
+                list.appendChild(div);
+            });
+        }
+
+        // 3. 发布新贴子到云端
+        async function publish() {
+            const content = document.getElementById('postInput').value;
+            if (!content) return;
+
+            const { error } = await supabase
+                .from('posts')
+                .insert([{ content: content, user_name: 'Echo' }]);
+
+            if (error) {
+                alert("发布失败，请检查Supabase里是否建了名为 posts 的表！");
+            } else {
+                document.getElementById('postInput').value = "";
+                fetchPosts(); // 刷新列表
             }
         }
 
-        // 2. 点击发布按钮
-        function addPost() {
-            const input = document.getElementById('post-input');
-            const val = input.value.trim();
-            if(!val) return;
-
-            const time = new Date().toLocaleString();
-            const id = "post_" + Date.now();
-
-            renderPost(val, time, id); // 显示在页面
-
-            // 保存到本地
-            const posts = JSON.parse(localStorage.getItem('echo_threads_data') || "[]");
-            posts.unshift({ text: val, time: time, id: id });
-            localStorage.setItem('echo_threads_data', JSON.stringify(posts));
-
-            input.value = ""; // 清空输入框
-        }
-
-        // 3. 把帖子画在屏幕上
-        function renderPost(text, time, id) {
-            const container = document.getElementById('threads-container');
-            const card = document.createElement('div');
-            card.className = 'thread-card';
-            card.id = id;
-
-            // 这里移除了所有 img 标签，只保留文字
-            card.innerHTML = `
-                <div class="del-btn" onclick="deletePost('${id}')">×</div>
-                <div class="user-name">@Echo</div>
-                <div class="post-time">${time}</div>
-                <p class="content">${text}</p >
-                <div class="actions">
-                    <span class="action-item" onclick="this.innerText=(this.innerText=='🤍'?'❤️':'🤍')">🤍</span>
-                    <span class="action-item" onclick="alert('评论功能开发中...')">💬</span>
-                    <span class="action-item" onclick="alert('转发成功！')">✈️</span>
-                </div>
-            `;
-            container.prepend(card);
-        }
-
-        // 4. 删除功能
-        function deletePost(id) {
-            if(!confirm("确定要删除这条动态吗？")) return;
-
-            // 从屏幕删除
-            const target = document.getElementById(id);
-            if(target) target.remove();
-
-            // 从存储中删除
-            let posts = JSON.parse(localStorage.getItem('echo_threads_data') || "[]");
-            posts = posts.filter(p => p.id !== id);
-            localStorage.setItem('echo_threads_data', JSON.stringify(posts));
-        }
+        // 初始加载
+        fetchPosts();
     </script>
 </body>
 </html>
