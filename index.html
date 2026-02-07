@@ -6,57 +6,33 @@
     <title>Echo's Threads</title>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <style>
-        :root { --primary: #000; --bg: #fff; --gray: #8e8e93; --border: #e5e5ea; --accent: #1d9bf0; }
-        body { font-family: -apple-system, sans-serif; margin: 0; padding-bottom: 70px; background: var(--bg); }
-        
-        /* App Header */
-        header { 
-            height: 60px; display: flex; align-items: center; justify-content: center;
-            position: sticky; top: 0; background: rgba(255,255,255,0.8);
-            backdrop-filter: blur(20px); z-index: 100; border-bottom: 0.5px solid var(--border);
-            font-size: 20px; font-weight: 800;
-        }
-
-        /* Feed List */
+        :root { --primary: #000; --bg: #fff; --gray: #8e8e93; --border: #e5e5ea; }
+        body { font-family: -apple-system, sans-serif; margin: 0; padding-bottom: 70px; background: var(--bg); overflow-x: hidden; }
+        header { height: 60px; display: flex; align-items: center; justify-content: center; position: sticky; top: 0; background: rgba(255,255,255,0.8); backdrop-filter: blur(20px); z-index: 100; border-bottom: 0.5px solid var(--border); font-size: 20px; font-weight: 800; }
         .app-container { max-width: 600px; margin: 0 auto; padding: 10px; }
         .post { padding: 16px 0; border-bottom: 0.5px solid var(--border); display: flex; gap: 12px; animation: fadeIn 0.4s; }
         .avatar { width: 40px; height: 40px; background: #f2f2f7; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: bold; color: var(--gray); flex-shrink: 0; }
         .post-main { flex: 1; }
         .user-name { font-weight: 700; font-size: 15px; margin-bottom: 4px; display: block; }
         .post-content { font-size: 15px; line-height: 1.4; white-space: pre-wrap; margin-bottom: 10px; }
-        
-        /* Actions */
-        .post-actions { display: flex; gap: 20px; color: var(--gray); }
-        .action-btn { cursor: pointer; display: flex; align-items: center; gap: 4px; font-size: 13px; }
-        .action-btn:hover { color: var(--accent); }
-
-        /* Bottom Nav */
-        .bottom-nav {
-            position: fixed; bottom: 0; width: 100%; height: 60px;
-            background: #fff; border-top: 0.5px solid var(--border);
-            display: flex; justify-content: space-around; align-items: center; z-index: 200;
-        }
-        .nav-item { text-align: center; color: var(--gray); cursor: pointer; font-size: 12px; flex: 1; }
-        .nav-item.active { color: var(--primary); }
-
-        /* Compose Modal */
+        .bottom-nav { position: fixed; bottom: 0; width: 100%; height: 60px; background: #fff; border-top: 0.5px solid var(--border); display: flex; justify-content: space-around; align-items: center; z-index: 200; }
+        .nav-item { text-align: center; color: var(--gray); cursor: pointer; font: 12px/1 sans-serif; flex: 1; }
+        .nav-item.plus { font-size: 28px; color: var(--primary); font-weight: bold; }
         #modal { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: #fff; z-index: 300; display: none; padding: 20px; box-sizing: border-box; }
         .modal-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
         #post-text { width: 100%; height: 200px; border: none; outline: none; font-size: 18px; resize: none; }
         .btn-send { background: var(--primary); color: #fff; border: none; padding: 8px 18px; border-radius: 20px; font-weight: bold; }
-
-        @keyframes fadeIn { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: translateY(0); } }
+        @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
     </style>
 </head>
 <body>
 
 <header>Echo's Threads</header>
-
-<div class="app-container" id="main-feed">正在加载最新动态...</div>
+<div class="app-container" id="main-feed">正在同步数据...</div>
 
 <div class="bottom-nav">
-    <div class="nav-item active" onclick="loadFeed()">首页</div>
-    <div class="nav-item" onclick="openModal()" style="font-size: 24px; font-weight: bold;">+</div>
+    <div class="nav-item" onclick="loadFeed()">首页</div>
+    <div class="nav-item plus" onclick="openModal()">+</div>
     <div class="nav-item" onclick="alert('个人中心即将上线')">我的</div>
 </div>
 
@@ -65,55 +41,49 @@
         <span onclick="closeModal()" style="color:var(--gray); cursor:pointer;">取消</span>
         <button class="btn-send" onclick="sendPost()">发布</button>
     </div>
-    <input type="text" id="nick" placeholder="昵称" style="width:100%; padding:10px; border:none; border-bottom:1px solid #eee; margin-bottom:10px; outline:none;">
+    <input type="text" id="nick" placeholder="你的昵称" style="width:100%; padding:10px; border:none; border-bottom:1px solid #eee; margin-bottom:10px; outline:none; font-size:16px;">
     <textarea id="post-text" placeholder="发生了什么新鲜事？"></textarea>
 </div>
 
 <script>
-    // 使用你刚才诊断成功的配置
+    // 这里的配置一定要填你诊断成功的那组！
     const SUPABASE_URL = 'https://fzxucsdptrikazqvdnlv.supabase.co';
     const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZ6eHVjc2RwdHJpa2F6cXZkbmx2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzAzMzU0NjYsImV4cCI6MjA4NTkxMTQ2Nn0.ZChcBRbRorV7pHrQmGd0MV_A2x4fz8_h55-lMqvHhNY'; 
     const client = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
-    // 页面加载就执行
-    window.onload = () => {
-        const savedNick = localStorage.getItem('echo_nick');
-        if (savedNick) document.getElementById('nick').value = savedNick;
-        loadFeed();
-    };
-
     async function loadFeed() {
         const feed = document.getElementById('main-feed');
-        // 这里只取核心字段，哪怕数据库多了 image_url 也不影响显示
-        const { data, error } = await client.from('posts').select('id, user_name, content, likes').order('id', { ascending: false });
-        
-        if (error) {
-            feed.innerHTML = "同步失败，请刷新页面";
-            return;
-        }
+        try {
+            // 只抓取最稳妥的三个核心列
+            const { data, error } = await client.from('posts').select('id, user_name, content').order('id', { ascending: false });
+            
+            if (error) throw error;
 
-        feed.innerHTML = data.map(p => `
-            <div class="post">
-                <div class="avatar">${(p.user_name || '匿')[0].toUpperCase()}</div>
-                <div class="post-main">
-                    <span class="user-name">@${p.user_name || '匿名'}</span>
-                    <div class="post-content">${p.content}</div>
-                    <div class="post-actions">
-                        <div class="action-btn" onclick="like(${p.id}, this)">❤️ <span>${p.likes || 0}</span></div>
+            if (data.length === 0) {
+                feed.innerHTML = '<div style="text-align:center; color:gray; padding-top:50px;">还没有动态，点击下方 + 号发一条吧！</div>';
+                return;
+            }
+
+            feed.innerHTML = data.map(p => `
+                <div class="post">
+                    <div class="avatar">${(p.user_name || '匿')[0].toUpperCase()}</div>
+                    <div class="post-main">
+                        <span class="user-name">@${p.user_name || '匿名'}</span>
+                        <div class="post-content">${p.content || ''}</div>
                     </div>
                 </div>
-            </div>
-        `).join('');
+            `).join('');
+        } catch (e) {
+            feed.innerHTML = "同步失败，请检查网络并重试。";
+        }
     }
 
     async function sendPost() {
         const txt = document.getElementById('post-text').value;
         const name = document.getElementById('nick').value || '匿名';
-        if (!txt) return;
+        if (!txt.trim()) return;
 
-        localStorage.setItem('echo_nick', name);
-        // 发布时只写核心字段，绕过可能报错的 image_url
-        const { error } = await client.from('posts').insert([{ content: txt, user_name: name, likes: 0 }]);
+        const { error } = await client.from('posts').insert([{ content: txt, user_name: name }]);
         
         if (!error) {
             document.getElementById('post-text').value = "";
@@ -124,18 +94,15 @@
         }
     }
 
-    async function like(id, el) {
-        const span = el.querySelector('span');
-        let count = parseInt(span.innerText);
-        span.innerText = count + 1;
-        await client.from('posts').update({ likes: count + 1 }).eq('id', id);
-    }
-
     function openModal() { document.getElementById('modal').style.display = 'block'; }
     function closeModal() { document.getElementById('modal').style.display = 'none'; }
+    
+    // 首次进入自动加载
+    loadFeed();
 </script>
 </body>
 </html>
+
 
 
 
